@@ -14,7 +14,7 @@ This project uses:
 ## Setup
 Open a terminal in the project root (sakila-project).
 
-# Terminal 1
+### Terminal 1
 ```
 cd backend
 python -m venv venv
@@ -24,7 +24,7 @@ $env:SAKILA_PASSWORD="your_mysql_root_password"
 python app.py
 ```
 
-# Terminal 2
+### Terminal 2
 ```
 cd frontend
 npm install
