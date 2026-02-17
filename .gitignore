@@ -13,3 +13,10 @@ frontend/dist/
 # OS junk
 .DS_Store
 Thumbs.db
+
+# venv, installed locally
+venv/
+.venv/
+__pycache__/
+*.pyc
+
