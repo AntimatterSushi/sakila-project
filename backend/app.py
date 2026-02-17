@@ -12,6 +12,8 @@ def health():
     return {"status": "ok"}
 
 # Search customer by ID
+# app.get Gets the details
+# Edge case: If no customer, 404
 @app.get("/customersearch/<int:customer_id>")
 def get_customer(customer_id: int):
     customer = query_one("SELECT customer_id, first_name, last_name, email FROM customer WHERE customer_id = %s", (customer_id,))
@@ -20,6 +22,8 @@ def get_customer(customer_id: int):
     return customer
 
 # Adding a new customer to the database
+# app.post Needs first,last, and email
+# Edge case: On missing field, return error.
 @app.post("/customeradd")
 def add_customer():
     data = request.get_json()
@@ -30,8 +34,6 @@ def add_customer():
     if not first_name or not last_name or not email:
         return {"error": "First name, last name, and email are required"}, 400
 
-    # Sakila requires store_id and address_id. 
-    # For now, we'll use '1' as a default to get it working.
     affected = execute(
         """
         INSERT INTO customer (first_name, last_name, email, store_id, address_id) 
@@ -46,6 +48,8 @@ def add_customer():
     return {"status": "added", "first_name": first_name, "last_name": last_name, "email": email}
 
 # Removing a customer from the database
+# app.delete Delete the customer ID
+# Edge case: If they don't exist, 404
 @app.delete("/customerdelete/<int:customer_id>")
 def delete_customer(customer_id: int):
     affected = execute("DELETE FROM customer WHERE customer_id = %s", (customer_id,))
@@ -54,6 +58,8 @@ def delete_customer(customer_id: int):
     return {"status": "deleted", "customer_id": customer_id}
 
 # Edit a customer's email or name
+# app.put Edits the customer's name, email, using their unique ID
+# Edge case: If they don't exist, 404.
 @app.put("/customeredit/<int:customer_id>")
 def edit_customer(customer_id: int):
     data = request.get_json()
@@ -83,6 +89,49 @@ def edit_customer(customer_id: int):
         return {"error": "Customer not found or no changes made"}, 404
     return {"status": "updated", "customer_id": customer_id}
 
+# Rent a film to a customer
+# app.post Rents a film to a customer using their ID and the film ID
+# Edge case: If either ID is missing, 404.
+# Edge case: If no copies of the film, 404. 
+@app.post("/rentals/rent")
+def rent_film():
+    data = request.get_json()
+    customer_id = data.get("customer_id")
+    film_id = data.get("film_id")
+
+    if not customer_id or not film_id:
+        return {"error": "customer_id and film_id are required"}, 400
+
+    inventory = query_one(
+        """
+        SELECT inventory_id 
+        FROM inventory 
+        WHERE film_id = %s 
+          AND inventory_id NOT IN (
+              SELECT inventory_id FROM rental WHERE return_date IS NULL
+          )
+        LIMIT 1
+        """,
+        (film_id,),
+    )
+
+    if inventory is None:
+        return {"error": "No available copies of the film"}, 400
+
+    inventory_id = inventory["inventory_id"]
+
+    affected = execute(
+        """
+        INSERT INTO rental (rental_date, inventory_id, customer_id, staff_id)
+        VALUES (NOW(), %s, %s, 1)
+        """,
+        (inventory_id, customer_id),
+    )
+
+    if affected == 0:
+        return {"error": "Failed to create rental"}, 500
+
+    return {"status": "rented", "customer_id": customer_id, "film_id": film_id}
 
 
 # --- Landing page features ---
