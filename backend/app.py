@@ -11,6 +11,79 @@ CORS(app)
 def health():
     return {"status": "ok"}
 
+# Search customer by ID
+@app.get("/customersearch/<int:customer_id>")
+def get_customer(customer_id: int):
+    customer = query_one("SELECT customer_id, first_name, last_name, email FROM customer WHERE customer_id = %s", (customer_id,))
+    if customer is None:
+        return {"error": "Customer not found"}, 404
+    return customer
+
+# Adding a new customer to the database
+@app.post("/customeradd")
+def add_customer():
+    data = request.get_json()
+    first_name = data.get("first_name")
+    last_name = data.get("last_name")
+    email = data.get("email")
+
+    if not first_name or not last_name or not email:
+        return {"error": "First name, last name, and email are required"}, 400
+
+    # Sakila requires store_id and address_id. 
+    # For now, we'll use '1' as a default to get it working.
+    affected = execute(
+        """
+        INSERT INTO customer (first_name, last_name, email, store_id, address_id) 
+        VALUES (%s, %s, %s, %s, %s)
+        """, 
+        (first_name, last_name, email, 1, 1)
+    )
+    
+    if affected == 0:
+        return {"error": "Failed to add customer"}, 500
+        
+    return {"status": "added", "first_name": first_name, "last_name": last_name, "email": email}
+
+# Removing a customer from the database
+@app.delete("/customerdelete/<int:customer_id>")
+def delete_customer(customer_id: int):
+    affected = execute("DELETE FROM customer WHERE customer_id = %s", (customer_id,))
+    if affected == 0:
+        return {"error": "Customer not found"}, 404
+    return {"status": "deleted", "customer_id": customer_id}
+
+# Edit a customer's email or name
+@app.put("/customeredit/<int:customer_id>")
+def edit_customer(customer_id: int):
+    data = request.get_json()
+    first_name = data.get("first_name")
+    last_name = data.get("last_name")
+    email = data.get("email")
+
+    if not first_name and not last_name and not email:
+        return {"error": "At least one of first_name, last_name, or email must be provided"}, 400
+
+    fields = []
+    params = []
+    if first_name:
+        fields.append("first_name = %s")
+        params.append(first_name)
+    if last_name:
+        fields.append("last_name = %s")
+        params.append(last_name)
+    if email:
+        fields.append("email = %s")
+        params.append(email)
+    params.append(customer_id)
+
+    sql = f"UPDATE customer SET {', '.join(fields)} WHERE customer_id = %s"
+    affected = execute(sql, tuple(params))
+    if affected == 0:
+        return {"error": "Customer not found or no changes made"}, 404
+    return {"status": "updated", "customer_id": customer_id}
+
+
 
 # --- Landing page features ---
 
