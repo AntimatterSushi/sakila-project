@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# venv, installed locally
+venv/
+.venv/
+__pycache__/
+*.pyc
+
