@@ -1,10 +1,16 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from 'react'
 import api from '../services/api'
+import { Link } from 'react-router-dom'
+import { styles } from '../ui/styles'
+import { useNavigate } from 'react-router-dom'
 
 export default function CustomersPage() {
+  const navigate = useNavigate()
+  
   const [customers, setCustomers] = useState([])
   const [status, setStatus] = useState('')
+  const [error, setError] = useState('')
 
   const [searchId, setSearchId] = useState('')
   const [searchResult, setSearchResult] = useState(null)
@@ -18,36 +24,37 @@ export default function CustomersPage() {
 
   function loadCustomers() {
     setStatus('')
+    setError('')
     api.get('/customers')
       .then(res => setCustomers(res.data))
       .catch(err => {
         console.error(err)
-        setStatus('Failed to load customers')
+        setError('Failed to load customers')
       })
   }
 
   useEffect(() => {
-    setStatus('')
-    api.get('/customers')
-      .then(res => setCustomers(res.data))
-      .catch(err => {
-        console.error(err)
-        setStatus('Failed to load customers')
-      })
+    loadCustomers()
   }, [])
-
 
   function doSearch() {
     setStatus('')
+    setError('')
     setSearchResult(null)
+
     if (!searchId) return
-    api.get(`/customersearch/${searchId}`)
-      .then(res => setSearchResult(res.data))
-      .catch(() => setStatus('Customer not found'))
+
+    api.get(`/customers/search?q=${encodeURIComponent(searchId)}`)
+      .then(res => {
+        setSearchResult(res.data)
+      })
+      .catch(() => setError('Search failed'))
   }
+
 
   function doAdd() {
     setStatus('')
+    setError('')
     api.post('/customeradd', addForm)
       .then(() => {
         setStatus('Customer added')
@@ -56,13 +63,15 @@ export default function CustomersPage() {
       })
       .catch(err => {
         console.error(err)
-        setStatus('Failed to add customer')
+        setError('Failed to add customer')
       })
   }
 
   function doEdit() {
     setStatus('')
+    setError('')
     if (!editId) return
+
     const payload = {}
     if (editForm.first_name) payload.first_name = editForm.first_name
     if (editForm.last_name) payload.last_name = editForm.last_name
@@ -76,13 +85,15 @@ export default function CustomersPage() {
       })
       .catch(err => {
         console.error(err)
-        setStatus('Failed to edit customer')
+        setError('Failed to edit customer')
       })
   }
 
   function doDelete() {
     setStatus('')
+    setError('')
     if (!deleteId) return
+
     api.delete(`/customerdelete/${deleteId}`)
       .then(() => {
         setStatus('Customer deleted')
@@ -91,126 +102,169 @@ export default function CustomersPage() {
       })
       .catch(err => {
         console.error(err)
-        setStatus('Failed to delete customer. They may have rentals.')
+        setError('Failed to delete customer. They may have rentals.')
       })
   }
 
   return (
     <div style={styles.page}>
-      <h2 style={styles.h2}>Customers</h2>
-      {status && <p style={styles.status}>{status}</p>}
+      <header style={styles.header}>
+        <div style={styles.headerCenter}>
+          <h1 style={styles.title}>Sakila Video Store</h1>
+          <p style={styles.subtitle}>Customer records</p>
+
+          <div style={{ marginTop: 12 }}>
+            <button
+              style={styles.primaryButton}
+              onClick={() => navigate('/')}
+            >
+              Back to home
+            </button>
+          </div>
+        </div>
+      </header>
+
 
       <div style={styles.grid}>
-        <section style={styles.card}>
-          <h3 style={styles.h3}>Customer list</h3>
-          <button style={styles.button} onClick={loadCustomers}>Refresh</button>
+        {(error || status) && (
+          <div style={error ? styles.error : styles.card}>
+            {error || status}
+          </div>
+        )}
 
-          <div style={styles.list}>
-            {customers.map(c => (
-              <div key={c.customer_id} style={styles.row}>
-                <div style={styles.rowMain}>
-                  <div style={styles.rowTitle}>
-                    {c.first_name} {c.last_name}
-                  </div>
-                  <div style={styles.rowMeta}>
-                    id {c.customer_id} · {c.email}
+        <section style={styles.card}>
+          <div style={styles.cardHeader}>
+            <h2 style={styles.cardTitle}>CUSTOMER LIST</h2>
+
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                value={searchId}
+                onChange={e => setSearchId(e.target.value)}
+                placeholder="search"
+                style={{ ...styles.input, width: 140 }}
+              />
+              <button style={styles.primaryButton} onClick={doSearch}>Search</button>
+              <button style={styles.primaryButton} onClick={loadCustomers}>Refresh</button>
+            </div>
+          </div>
+
+          {/* if search found someone, show them at the top */}
+          {Array.isArray(searchResult) && searchResult.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              {searchResult.map(c => (
+                <div key={c.customer_id} style={{ ...styles.listItem, marginBottom: 8 }}>
+                  <div style={styles.itemMain}>
+                    <div style={{ fontFamily: 'Impact', letterSpacing: '0.06em' }}>
+                      {c.first_name} {c.last_name}
+                    </div>
+                    <div style={styles.itemMeta}>id {c.customer_id} · {c.email}</div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section style={styles.card}>
-          <h3 style={styles.h3}>Search by customer id</h3>
-          <div style={styles.formRow}>
-            <input
-              style={styles.input}
-              placeholder="customer id"
-              value={searchId}
-              onChange={e => setSearchId(e.target.value)}
-            />
-            <button style={styles.button} onClick={doSearch}>Search</button>
-          </div>
-
-          {searchResult && (
-            <div style={styles.result}>
-              <div><b>{searchResult.first_name} {searchResult.last_name}</b></div>
-              <div>id {searchResult.customer_id}</div>
-              <div>{searchResult.email}</div>
+              ))}
             </div>
           )}
+
+
+          {/* scrollable list */}
+          <div style={styles.scrollBox}>
+            <ul style={styles.list}>
+              {customers.map(c => (
+                <li key={c.customer_id} style={styles.listItem}>
+                  <div style={styles.itemMain}>
+                    <div style={{ fontFamily: 'Impact', letterSpacing: '0.06em' }}>
+                      {c.first_name} {c.last_name}
+                    </div>
+                    <div style={styles.itemMeta}>id {c.customer_id} · {c.email}</div>
+                  </div>
+                  <Link to={`/customers/${c.customer_id}`} style={styles.smallButton}>
+                    View
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
         </section>
 
         <section style={styles.card}>
-          <h3 style={styles.h3}>Add customer</h3>
-          <div style={styles.formCol}>
+          <div style={styles.cardHeader}>
+            <h2 style={styles.cardTitle}>ADD CUSTOMER</h2>
+          </div>
+
+          <div style={{ display: 'grid', gap: 10 }}>
             <input
-              style={styles.input}
-              placeholder="first name"
               value={addForm.first_name}
               onChange={e => setAddForm({ ...addForm, first_name: e.target.value })}
+              placeholder="first name"
+              style={inputStyle}
             />
             <input
-              style={styles.input}
-              placeholder="last name"
               value={addForm.last_name}
               onChange={e => setAddForm({ ...addForm, last_name: e.target.value })}
+              placeholder="last name"
+              style={inputStyle}
             />
             <input
-              style={styles.input}
-              placeholder="email"
               value={addForm.email}
               onChange={e => setAddForm({ ...addForm, email: e.target.value })}
+              placeholder="email"
+              style={inputStyle}
             />
-            <button style={styles.button} onClick={doAdd}>Add</button>
+            <button style={styles.primaryButton} onClick={doAdd}>Add</button>
           </div>
         </section>
 
         <section style={styles.card}>
-          <h3 style={styles.h3}>Edit customer</h3>
-          <div style={styles.formCol}>
+          <div style={styles.cardHeader}>
+            <h2 style={styles.cardTitle}>EDIT CUSTOMER</h2>
+          </div>
+
+          <div style={{ display: 'grid', gap: 10 }}>
             <input
-              style={styles.input}
-              placeholder="customer id"
               value={editId}
               onChange={e => setEditId(e.target.value)}
+              placeholder="customer id"
+              style={inputStyle}
             />
             <input
-              style={styles.input}
-              placeholder="new first name optional"
               value={editForm.first_name}
               onChange={e => setEditForm({ ...editForm, first_name: e.target.value })}
+              placeholder="new first name optional"
+              style={inputStyle}
             />
             <input
-              style={styles.input}
-              placeholder="new last name optional"
               value={editForm.last_name}
               onChange={e => setEditForm({ ...editForm, last_name: e.target.value })}
+              placeholder="new last name optional"
+              style={inputStyle}
             />
             <input
-              style={styles.input}
-              placeholder="new email optional"
               value={editForm.email}
               onChange={e => setEditForm({ ...editForm, email: e.target.value })}
+              placeholder="new email optional"
+              style={inputStyle}
             />
-            <button style={styles.button} onClick={doEdit}>Update</button>
+            <button style={styles.primaryButton} onClick={doEdit}>Update</button>
           </div>
         </section>
 
         <section style={styles.card}>
-          <h3 style={styles.h3}>Delete customer</h3>
-          <div style={styles.formRow}>
+          <div style={styles.cardHeader}>
+            <h2 style={styles.cardTitle}>DELETE CUSTOMER</h2>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <input
-              style={styles.input}
-              placeholder="customer id"
               value={deleteId}
               onChange={e => setDeleteId(e.target.value)}
+              placeholder="customer id"
+              style={{ ...inputStyle, flex: 1, minWidth: 160 }}
             />
-            <button style={styles.dangerButton} onClick={doDelete}>Delete</button>
-          </div>
-          <div style={styles.help}>
-            If deletion fails, they probably have rentals. you can demo deactivate later.
+            <button
+              onClick={doDelete}
+              style={{ ...styles.primaryButton, background: '#ef4444' }}
+            >
+              Delete
+            </button>
           </div>
         </section>
       </div>
@@ -218,23 +272,10 @@ export default function CustomersPage() {
   )
 }
 
-const styles = {
-  page: { padding: 18, maxWidth: 1100, margin: '0 auto' },
-  h2: { margin: '8px 0 14px 0' },
-  h3: { margin: '0 0 12px 0' },
-  status: { padding: 10, background: '#f3f4f6', borderRadius: 10 },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 },
-  card: { border: '1px solid #e5e7eb', borderRadius: 14, padding: 14, background: 'white' },
-  list: { display: 'grid', gap: 10, marginTop: 12 },
-  row: { border: '1px solid #eef2f7', borderRadius: 12, padding: 12 },
-  rowMain: { display: 'flex', flexDirection: 'column', gap: 4 },
-  rowTitle: { fontWeight: 700 },
-  rowMeta: { fontSize: 12, color: '#6b7280' },
-  formRow: { display: 'flex', gap: 10, alignItems: 'center' },
-  formCol: { display: 'grid', gap: 10 },
-  input: { padding: 10, borderRadius: 10, border: '1px solid #e5e7eb', width: '100%' },
-  button: { padding: '10px 12px', borderRadius: 10, border: '1px solid #e5e7eb', background: '#111827', color: 'white', cursor: 'pointer' },
-  dangerButton: { padding: '10px 12px', borderRadius: 10, border: '1px solid #ef4444', background: '#ef4444', color: 'white', cursor: 'pointer' },
-  result: { marginTop: 10, padding: 12, borderRadius: 12, border: '1px solid #e5e7eb' },
-  help: { marginTop: 8, fontSize: 12, color: '#6b7280' }
+const inputStyle = {
+  padding: 10,
+  borderRadius: 10,
+  border: '1px solid rgba(255,255,255,0.18)',
+  background: 'rgba(0,0,0,0.25)',
+  color: '#e9ecf1'
 }

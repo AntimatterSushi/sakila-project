@@ -21,6 +21,38 @@ def get_customer(customer_id: int):
         return {"error": "Customer not found"}, 404
     return customer
 
+@app.get("/customers/search")
+def search_customers():
+    q = request.args.get("q", "").strip()
+
+    if q == "":
+        return []
+
+    like = f"%{q}%"
+
+    # If q is a number, allow id match too
+    if q.isdigit():
+        sql = """
+        SELECT customer_id, first_name, last_name, email
+        FROM customer
+        WHERE customer_id = %s
+           OR first_name LIKE %s
+           OR last_name LIKE %s
+        ORDER BY customer_id
+        LIMIT 50
+        """
+        return query_all(sql, (int(q), like, like))
+    else:
+        sql = """
+        SELECT customer_id, first_name, last_name, email
+        FROM customer
+        WHERE first_name LIKE %s
+           OR last_name LIKE %s
+        ORDER BY customer_id
+        LIMIT 50
+        """
+        return query_all(sql, (like, like))
+
 # Adding a new customer to the database
 # app.post Needs first,last, and email
 # Edge case: On missing field, return error.
