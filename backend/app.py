@@ -268,11 +268,22 @@ def search_films():
 
 @app.get("/customers")
 def list_customers():
-    # simple list for now, you can add pagination later
-    return query_all(
-        "SELECT customer_id, first_name, last_name, email FROM customer ORDER BY customer_id LIMIT 200"
-    )
+    page = int(request.args.get("page", 1))
+    size = int(request.args.get("size", 1000))
+    page = max(page, 1)
+    size = min(max(size, 1), 1000)
 
+    offset = (page - 1) * size
+
+    return query_all(
+        """
+        SELECT customer_id, first_name, last_name, email
+        FROM customer
+        ORDER BY customer_id
+        LIMIT %s OFFSET %s
+        """,
+        (size, offset)
+    )
 
 @app.get("/customers/<int:customer_id>")
 def customer_details(customer_id: int):
