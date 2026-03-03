@@ -53,119 +53,6 @@ def search_customers():
         """
         return query_all(sql, (like, like))
 
-# Adding a new customer to the database
-# app.post Needs first,last, and email
-# Edge case: On missing field, return error.
-@app.post("/customeradd")
-def add_customer():
-    data = request.get_json()
-    first_name = data.get("first_name")
-    last_name = data.get("last_name")
-    email = data.get("email")
-
-    if not first_name or not last_name or not email:
-        return {"error": "First name, last name, and email are required"}, 400
-
-    affected = execute(
-        """
-        INSERT INTO customer (first_name, last_name, email, store_id, address_id) 
-        VALUES (%s, %s, %s, %s, %s)
-        """, 
-        (first_name, last_name, email, 1, 1)
-    )
-    
-    if affected == 0:
-        return {"error": "Failed to add customer"}, 500
-        
-    return {"status": "added", "first_name": first_name, "last_name": last_name, "email": email}
-
-# Removing a customer from the database
-# app.delete Delete the customer ID
-# Edge case: If they don't exist, 404
-@app.delete("/customerdelete/<int:customer_id>")
-def delete_customer(customer_id: int):
-    affected = execute("DELETE FROM customer WHERE customer_id = %s", (customer_id,))
-    if affected == 0:
-        return {"error": "Customer not found"}, 404
-    return {"status": "deleted", "customer_id": customer_id}
-
-# Edit a customer's email or name
-# app.put Edits the customer's name, email, using their unique ID
-# Edge case: If they don't exist, 404.
-@app.put("/customeredit/<int:customer_id>")
-def edit_customer(customer_id: int):
-    data = request.get_json()
-    first_name = data.get("first_name")
-    last_name = data.get("last_name")
-    email = data.get("email")
-
-    if not first_name and not last_name and not email:
-        return {"error": "At least one of first_name, last_name, or email must be provided"}, 400
-
-    fields = []
-    params = []
-    if first_name:
-        fields.append("first_name = %s")
-        params.append(first_name)
-    if last_name:
-        fields.append("last_name = %s")
-        params.append(last_name)
-    if email:
-        fields.append("email = %s")
-        params.append(email)
-    params.append(customer_id)
-
-    sql = f"UPDATE customer SET {', '.join(fields)} WHERE customer_id = %s"
-    affected = execute(sql, tuple(params))
-    if affected == 0:
-        return {"error": "Customer not found or no changes made"}, 404
-    return {"status": "updated", "customer_id": customer_id}
-
-# Rent a film to a customer
-# app.post Rents a film to a customer using their ID and the film ID
-# Edge case: If either ID is missing, 404.
-# Edge case: If no copies of the film, 404. 
-@app.post("/rentals/rent")
-def rent_film():
-    data = request.get_json()
-    customer_id = data.get("customer_id")
-    film_id = data.get("film_id")
-
-    if not customer_id or not film_id:
-        return {"error": "customer_id and film_id are required"}, 400
-
-    inventory = query_one(
-        """
-        SELECT inventory_id 
-        FROM inventory 
-        WHERE film_id = %s 
-          AND inventory_id NOT IN (
-              SELECT inventory_id FROM rental WHERE return_date IS NULL
-          )
-        LIMIT 1
-        """,
-        (film_id,),
-    )
-
-    if inventory is None:
-        return {"error": "No available copies of the film"}, 400
-
-    inventory_id = inventory["inventory_id"]
-
-    affected = execute(
-        """
-        INSERT INTO rental (rental_date, inventory_id, customer_id, staff_id)
-        VALUES (NOW(), %s, %s, 1)
-        """,
-        (inventory_id, customer_id),
-    )
-
-    if affected == 0:
-        return {"error": "Failed to create rental"}, 500
-
-    return {"status": "rented", "customer_id": customer_id, "film_id": film_id}
-
-
 # --- Landing page features ---
 
 @app.get("/films/top")
@@ -264,6 +151,51 @@ def search_films():
     return query_all(sql, (like, like, like, like))
 
 
+# Rent a film to a customer
+# app.post Rents a film to a customer using their ID and the film ID
+# Edge case: If either ID is missing, 404.
+# Edge case: If no copies of the film, 404. 
+@app.post("/rentals/rent")
+def rent_film():
+    data = request.get_json()
+    customer_id = data.get("customer_id")
+    film_id = data.get("film_id")
+
+    if not customer_id or not film_id:
+        return {"error": "customer_id and film_id are required"}, 400
+
+    inventory = query_one(
+        """
+        SELECT inventory_id 
+        FROM inventory 
+        WHERE film_id = %s 
+          AND inventory_id NOT IN (
+              SELECT inventory_id FROM rental WHERE return_date IS NULL
+          )
+        LIMIT 1
+        """,
+        (film_id,),
+    )
+
+    if inventory is None:
+        return {"error": "No available copies of the film"}, 400
+
+    inventory_id = inventory["inventory_id"]
+
+    affected = execute(
+        """
+        INSERT INTO rental (rental_date, inventory_id, customer_id, staff_id)
+        VALUES (NOW(), %s, %s, 1)
+        """,
+        (inventory_id, customer_id),
+    )
+
+    if affected == 0:
+        return {"error": "Failed to create rental"}, 500
+
+    return {"status": "rented", "customer_id": customer_id, "film_id": film_id}
+
+
 # --- Customer page starter endpoints ---
 
 @app.get("/customers")
@@ -312,6 +244,112 @@ def customer_details(customer_id: int):
     )
 
     return {"customer": customer, "rentals": rentals}
+
+# Adding a new customer to the database
+# app.post Needs first,last, and email
+# Edge case: On missing field, return error.
+@app.post("/customeradd")
+def add_customer():
+    data = request.get_json()
+    first_name = data.get("first_name")
+    last_name = data.get("last_name")
+    email = data.get("email")
+
+    if not first_name or not last_name or not email:
+        return {"error": "First name, last name, and email are required"}, 400
+
+    affected = execute(
+        """
+        INSERT INTO customer (first_name, last_name, email, store_id, address_id) 
+        VALUES (%s, %s, %s, %s, %s)
+        """, 
+        (first_name, last_name, email, 1, 1)
+    )
+    
+    if affected == 0:
+        return {"error": "Failed to add customer"}, 500
+        
+    return {"status": "added", "first_name": first_name, "last_name": last_name, "email": email}
+
+# Edit a customer's email or name
+# app.put Edits the customer's name, email, using their unique ID
+# Edge case: If they don't exist, 404.
+@app.put("/customeredit/<int:customer_id>")
+def edit_customer(customer_id: int):
+    data = request.get_json()
+    first_name = data.get("first_name")
+    last_name = data.get("last_name")
+    email = data.get("email")
+
+    if not first_name and not last_name and not email:
+        return {"error": "At least one of first_name, last_name, or email must be provided"}, 400
+
+    fields = []
+    params = []
+    if first_name:
+        fields.append("first_name = %s")
+        params.append(first_name)
+    if last_name:
+        fields.append("last_name = %s")
+        params.append(last_name)
+    if email:
+        fields.append("email = %s")
+        params.append(email)
+    params.append(customer_id)
+
+    sql = f"UPDATE customer SET {', '.join(fields)} WHERE customer_id = %s"
+    affected = execute(sql, tuple(params))
+    if affected == 0:
+        return {"error": "Customer not found or no changes made"}, 404
+    return {"status": "updated", "customer_id": customer_id}
+
+# Removing a customer from the database
+# app.delete Delete the customer ID
+# Edge case: If they don't exist, 404
+@app.delete("/customerdelete/<int:customer_id>")
+def delete_customer(customer_id: int):
+    affected = execute("DELETE FROM customer WHERE customer_id = %s", (customer_id,))
+    if affected == 0:
+        return {"error": "Customer not found"}, 404
+    return {"status": "deleted", "customer_id": customer_id}
+
+# Seeing a customer's rental history
+# app.get Gets the customer's rental history using their ID
+# Edge case: If they don't exist, 404.
+@app.get("/customerhistory/<int:customer_id>")
+def customer_history(customer_id: int):
+    customer = query_one("SELECT customer_id FROM customer WHERE customer_id = %s", (customer_id,))
+    if customer is None:
+        return {"error": "Customer not found"}, 404
+
+    rentals = query_all(
+        """
+        SELECT r.rental_id, f.film_id, f.title, r.rental_date, r.return_date
+        FROM rental r
+        JOIN inventory i ON r.inventory_id = i.inventory_id
+        JOIN film f ON i.film_id = f.film_id
+        WHERE r.customer_id = %s
+        ORDER BY r.rental_date DESC
+        """,
+        (customer_id,),
+    )
+
+    return {"customer_id": customer_id, "rentals": rentals}
+
+# Seeing if a customer has returned a film
+# app.get Gets whether the customer has returned a film using the rental ID
+# Edge case: If they don't exist, 404.
+@app.get("/rentalstatus/<int:rental_id>")
+def rental_status(rental_id: int):
+    rental = query_one(
+        "SELECT rental_id, return_date FROM rental WHERE rental_id = %s",
+        (rental_id,),
+    )
+    if rental is None:
+        return {"error": "Rental not found"}, 404
+
+    status = "returned" if rental["return_date"] is not None else "out"
+    return {"rental_id": rental_id, "status": status}
 
 
 @app.post("/rentals/return/<int:rental_id>")
